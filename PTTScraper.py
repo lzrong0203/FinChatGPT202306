@@ -55,13 +55,22 @@ class PTTScraper:
         soup = PTTScraper.get_soup(self.base_url + url)
 
         # Extract post information
-        content = soup.find(id='main-content').text
-        content = content.split('※ 發信站')[0]
-        author = soup.find(class_='article-meta-value').text
-        title = soup.find_all(class_='article-meta-value')[-2].text
-        date_str = soup.find_all(class_='article-meta-value')[-1].text
-        date = datetime.strptime(date_str, '%a %b %d %H:%M:%S %Y')
-
+        try:
+            content = soup.find(id='main-content').text
+            content = content.split('※ 發信站')[0]
+            if soup.find(class_='article-meta-value') is not None:
+                author = soup.find(class_='article-meta-value').text
+                title = soup.find_all(class_='article-meta-value')[-2].text
+                date_str = soup.find_all(class_='article-meta-value')[-1].text
+                date = datetime.strptime(date_str, '%a %b %d %H:%M:%S %Y')
+            else:
+                author = None
+                title = None
+                date_str = None
+                date = None
+        except Exception as e:
+            print(self.base_url + url)
+            print(e)
         # Extract comments
         pushes = soup.find_all('div', class_='push')
 
