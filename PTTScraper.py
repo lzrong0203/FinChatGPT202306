@@ -83,34 +83,56 @@ class PTTScraper:
     def get_data_current_page(self, soup=None, until_date=datetime.now(), *,
                               max_posts=100, links_num=0):
         reach = False
+        until_date = until_date.replace(hour=0, minute=0, second=0, microsecond=0)
+
         if soup is None:
             soup = PTTScraper.get_soup(self.url)
         links = []
-        for entry in reversed(soup.select('.r-ent')):
-            try:
-                if entry.find("div", "title").a is None:
-                    continue
-                # title = entry.select('.title')[0].text.strip()
-                # author = entry.select('.author')[0].text.strip()
-                date = entry.select('.date')[0].text.strip()
-                links.append(entry.select('.title a')[0]['href'])
-                # content, pushes = self.get_post_content(link)
-                # data.append({
-                #     "Title": title,
-                #     "Author": author,
-                #     "Date": date,
-                #     "Link": link,
-                #     "Content": content,
-                #     "Pushes": pushes
-                # })
-                until_date = until_date.replace(hour=0, minute=0, second=0, microsecond=0)
+        div_element = soup.find('div', {'class': 'r-list-sep'})
+        if div_element is None:
+            for entry in reversed(soup.select('.r-ent')):
+                try:
+                    if entry.find("div", "title").a is None:
+                        continue
+                    # title = entry.select('.title')[0].text.strip()
+                    # author = entry.select('.author')[0].text.strip()
+                    date = entry.select('.date')[0].text.strip()
+                    links.append(entry.select('.title a')[0]['href'])
+                    # content, pushes = self.get_post_content(link)
+                    # data.append({
+                    #     "Title": title,
+                    #     "Author": author,
+                    #     "Date": date,
+                    #     "Link": link,
+                    #     "Content": content,
+                    #     "Pushes": pushes
+                    # })
+                    # until_date = until_date.replace(hour=0, minute=0, second=0, microsecond=0)
+                    post_date = datetime.strptime(date, '%m/%d').replace(year=until_date.year)
+                    print(len(links))
+                    if len(links) + links_num >= max_posts or post_date < until_date:
+                        reach = True
+                        break
+                except Exception as e:
+                    print(e)
+        else:
+            previous_elements = [element for element in div_element.previous_siblings if
+                                 element.name == 'div' and 'r-ent' in element.get('class', [])]
+            for element in reversed(previous_elements):
+                # 找到標題和連結的元素
+                title_link_element = element.find('a')
+                if title_link_element:
+                    # 取得標題和連結
+                    links.append(title_link_element.get('href'))
+                date_element = element.find('div', {'class': 'date'})
+                if date_element:
+                    # 取得發文日期
+                    date = date_element.text.strip()
                 post_date = datetime.strptime(date, '%m/%d').replace(year=until_date.year)
-                print(len(links))
                 if len(links) + links_num >= max_posts or post_date < until_date:
                     reach = True
                     break
-            except Exception as e:
-                print(e)
+
         print(post_date)
         with ThreadPoolExecutor() as executor:
             data = list(executor.map(self.fetch_post, links))
@@ -140,7 +162,7 @@ class PTTScraper:
 if __name__ == "__main__":
     scraper = PTTScraper()
     begin = time.time()
-    data = scraper.get_data_until("6/2", max_posts=10)
+    data = scraper.get_data_until("6/4", max_posts=10)
     end = time.time()
     print(end - begin)
     df = pd.DataFrame(data)
