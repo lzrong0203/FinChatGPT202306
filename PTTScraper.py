@@ -174,7 +174,7 @@ class PTTScraper:
         :return: 文章 list
         """
         after_date = datetime.now() - timedelta(days=delta_days)
-        return self.get_data_until(after_date)
+        return self.get_data_until(after_date, max_posts=max_posts)
 
 
 # 使用方式
