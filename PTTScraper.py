@@ -1,6 +1,6 @@
 import requests
 from bs4 import BeautifulSoup
-from datetime import datetime
+from datetime import datetime, timedelta
 import pandas as pd
 from concurrent.futures import ThreadPoolExecutor
 import time
@@ -139,8 +139,17 @@ class PTTScraper:
         return data, reach, len(links)
 
     def get_data_until(self, until_date, *, max_posts=100):
+        """
+        取得到 until_date 之後的所有文章
+        :param until_date:  日期
+        :param max_posts: 最多抓取文章
+        :return: 文章串列
+        """
         data = []
-        date = datetime.strptime(until_date, '%m/%d').replace(year=datetime.now().year)
+        if not isinstance(until_date, datetime):
+            date = datetime.strptime(until_date, '%m/%d').replace(year=datetime.now().year)
+        else:
+            date = until_date
         links_num = 0
         while True:
             soup = PTTScraper.get_soup(self.url)
@@ -157,15 +166,24 @@ class PTTScraper:
             self.url = self.base_url + prev_link
         return data
 
+    def get_data_days_before(self, delta_days, *, max_posts=100):
+        """
+        取得 delat_days 天之前的文章
+        :param delta_days: 間隔天數
+        :param max_posts: 最多回抓取幾篇PO文
+        :return: 文章 list
+        """
+        after_date = datetime.now() - timedelta(days=delta_days)
+        return self.get_data_until(after_date)
+
 
 # 使用方式
 if __name__ == "__main__":
     scraper = PTTScraper()
     begin = time.time()
-    data = scraper.get_data_until("6/4", max_posts=10)
+    data = scraper.get_data_days_before(4)
     end = time.time()
     print(end - begin)
     df = pd.DataFrame(data)
     print(df)
     print(pd.DataFrame(df.Pushes[1]))
-
