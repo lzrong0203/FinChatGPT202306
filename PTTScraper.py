@@ -9,9 +9,9 @@ import time
 class PTTScraper:
     base_url = "https://www.ptt.cc"
 
-    def __init__(self):
+    def __init__(self, _board):
         self.base_url = PTTScraper.base_url
-        self.url = self.base_url + "/bbs/Stock/index.html"
+        self.url = self.base_url + f"/bbs/{_board}/index.html"
 
     def get_post_content(self, post_url):
         soup = PTTScraper.get_soup(self.base_url + post_url)
@@ -76,20 +76,10 @@ class PTTScraper:
 
         with ThreadPoolExecutor() as executor:
             push_list = list(executor.map(self.get_push, pushes))
-        #
-        # comments = []
-        # for div in soup.find_all('div', class_='push'):
-        #     if div.find('span', 'push-tag') is None:
-        #         continue
-        #     push_tag = div.find('span', 'push-tag').text.strip()
-        #     push_userid = div.find('span', 'push-userid').text.strip()
-        #     push_content = div.find('span', 'push-content').text.strip()
-        #     comments.append({'tag': push_tag, 'userid': push_userid, 'content': push_content})
-
         return {'Title': title, 'Author': author, 'Date': date, 'Content': content,
                 'Link': url, 'Pushes': push_list}
 
-    def get_data_current_page(self, soup=None, until_date=datetime.now(), *,
+    def get_data_current_page(self, soup=None, until_date=datetime.now(), *args,
                               max_posts=100, links_num=0):
         reach = False
         until_date = until_date.replace(hour=0, minute=0, second=0, microsecond=0)
@@ -101,37 +91,42 @@ class PTTScraper:
         if div_element is None:
             for entry in reversed(soup.select('.r-ent')):
                 try:
+                    title = entry.find("div", "title").text.strip()
                     if entry.find("div", "title").a is None:
                         continue
-                    # title = entry.select('.title')[0].text.strip()
-                    # author = entry.select('.author')[0].text.strip()
+                    # print(title)
+                    if len(args) == 2:
+                        if not (args[0] in title and args[1] in title):
+                            continue
+                    elif len(args) == 1:
+                        if args[0] not in title:
+                            print("1")
+                            # continue
+                    else:
+                        pass
                     date = entry.select('.date')[0].text.strip()
-                    links.append(entry.select('.title a')[0]['href'])
-                    # content, pushes = self.get_post_content(link)
-                    # data.append({
-                    #     "Title": title,
-                    #     "Author": author,
-                    #     "Date": date,
-                    #     "Link": link,
-                    #     "Content": content,
-                    #     "Pushes": pushes
-                    # })
-                    # until_date = until_date.replace(hour=0, minute=0, second=0, microsecond=0)
+
                     post_date = datetime.strptime(date, '%m/%d').replace(year=until_date.year)
-                    print(len(links))
+                    # print(len(links))
                     if len(links) + links_num >= max_posts or post_date < until_date:
                         reach = True
                         break
+                    links.append(entry.select('.title a')[0]['href'])
                 except Exception as e:
                     print(e)
         else:
             previous_elements = [element for element in div_element.previous_siblings if
                                  element.name == 'div' and 'r-ent' in element.get('class', [])]
             for element in reversed(previous_elements):
+
                 # 找到標題和連結的元素
                 title_link_element = element.find('a')
                 if title_link_element:
                     # 取得標題和連結
+                    title = title_link_element.text.strip()
+                    if len(args) == 2:
+                        if not (args[0] in title and args[1] in title):
+                            continue
                     links.append(title_link_element.get('href'))
                 date_element = element.find('div', {'class': 'date'})
                 if date_element:
@@ -141,13 +136,15 @@ class PTTScraper:
                 if len(links) + links_num >= max_posts or post_date < until_date:
                     reach = True
                     break
-
+        if 'post_date' not in locals():
+            return [], False, 0
         print(post_date)
+        print(len(links))
         with ThreadPoolExecutor() as executor:
             data = list(executor.map(self.fetch_post, links))
         return data, reach, len(links)
 
-    def get_data_until(self, until_date, *, max_posts=100):
+    def get_data_until(self, until_date, *args, max_posts=100):
         """
         取得到 until_date 之後的所有文章
         :param until_date:  日期
@@ -162,7 +159,7 @@ class PTTScraper:
         links_num = 0
         while True:
             soup = PTTScraper.get_soup(self.url)
-            data_curr, date_end, num = self.get_data_current_page(soup, date,
+            data_curr, date_end, num = self.get_data_current_page(soup, date, *args,
                                                                   max_posts=max_posts, links_num=links_num)
             data.extend(data_curr)
 
@@ -175,7 +172,7 @@ class PTTScraper:
             self.url = self.base_url + prev_link
         return data
 
-    def get_data_days_before(self, delta_days, *, max_posts=100):
+    def get_data_days_before(self, delta_days, *args, max_posts=100):
         """
         取得 delat_days 天之前的文章
         :param delta_days: 間隔天數
@@ -183,16 +180,23 @@ class PTTScraper:
         :return: 文章 list
         """
         after_date = datetime.now() - timedelta(days=delta_days)
-        return self.get_data_until(after_date, max_posts=max_posts)
+        print(args)
+        return self.get_data_until(after_date, *args, max_posts=max_posts)
+
+    def get_title_and_before_days(self, *args, delta_days, max_posts=100):
+        return self.get_data_days_before(delta_days, *args, max_posts=max_posts)
 
 
 # 使用方式
 if __name__ == "__main__":
-    scraper = PTTScraper()
+    board = "Stock"
+    scraper = PTTScraper(board)
     begin = time.time()
-    data = scraper.get_data_days_before(4)
+    # data = scraper.get_data_days_before(1)
+    data = scraper.get_title_and_before_days("盤中", "[閒聊]", delta_days=30)
     end = time.time()
     print(end - begin)
-    df = pd.DataFrame(data)
-    print(df)
-    print(pd.DataFrame(df.Pushes[1]))
+    if data is not None:
+        df = pd.DataFrame(data)
+        print(df.Title)
+    # print(pd.DataFrame(df.Pushes[1]))
